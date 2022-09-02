@@ -1,0 +1,28 @@
+color_value = _{"#"? ~ ASCII_ALPHANUMERIC+}
+
+hair_color = {"hcl:" ~ color_value}
+eye_color = {"ecl:" ~ color_value}
+
+length_unit = _{"cm" | "in"}
+height = {"hgt:" ~ ASCII_DIGIT+ ~ length_unit}
+
+country_id = {"cid:" ~ ASCII_DIGIT+}
+passport_id = {"pid:" ~ ASCII_DIGIT+}
+
+birth_year = {"byr:" ~ ASCII_DIGIT+}
+expiry_year = {"eyr:" ~ ASCII_DIGIT+}
+issue_year = {"iyr:" ~ ASCII_DIGIT+}
+
+space_value = _{"\n" | " "}
+
+bad_key = { ASCII_ALPHA+ ~ ":" ~ ASCII_ALPHANUMERIC+ }
+
+entry = _{hair_color | eye_color | height | country_id 
+    | passport_id | birth_year | expiry_year | issue_year | bad_key }
+
+passport = {(entry ~ space_value?)*}
+
+file = {SOI ~ 
+    (passport ~ NEWLINE)* ~
+    passport ~ 
+    EOI}

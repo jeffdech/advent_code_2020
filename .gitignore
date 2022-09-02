@@ -1,0 +1,8 @@
+# cargo files
+*.lock
+
+# object
+*.o
+
+# target files
+target/
