@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::fmt;
+use std::iter::zip;
 
 use nom::{
     bytes::complete::{tag},
@@ -47,7 +49,7 @@ pub struct Program {
 }
 
 impl fmt::Debug for Program {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.instructions.iter().for_each(|inst| println!("{:?}", inst));
         Ok(())
     }
@@ -61,7 +63,23 @@ impl Program {
             .map(nom::branch::alt((Program::parse_mask, Program::parse_assign)))
             .map(|r| r.unwrap().1)
             .collect();
+
         Self { instructions }
+    }
+
+    pub fn run(&self) -> u64 {
+        let mut mask: Mask = Default::default();
+        let mut mem = HashMap::<u64, u64>::new();
+
+        self.instructions.iter()
+            .for_each(|&inst|{
+                match inst {
+                    Instruction::SetMask(m) => mask = m,
+                    Instruction::Assign {addr, val} => {mem.insert(addr, mask.apply(val));},
+                }
+            });
+        
+        mem.values().sum()
     }
 
     fn parse_mask(input: &str) -> Res<&str, Instruction> {
@@ -77,8 +95,7 @@ impl Program {
                         match c {
                             '1' => {mask.set |= 2_u64.pow(n as _)},
                             '0' => {mask.clear |= 2_u64.pow(n as _)},
-                            'X' => {},
-                            _ => unreachable!()
+                            _ => {},
                         }
                     });
                 
@@ -106,16 +123,26 @@ mod tests {
 
     #[test]
     fn test_parse_mask() {
-        let mask_line = "mask = XXXXXXXXXXXXXXXXXXXXXXXXXXXXX1XXXX0X";
-        let expected = Instruction::SetMask(Mask {set: 1 << 6, clear: 2});
+        let mask_line = vec![
+            "mask = XXXXXXXXXXXXXXXXXXXXXXXXXXXXX1XXXX0X",
+            "mask = XXXXXXXXXXXXXXXXXXXXXXXXXXXX011XXX01",
+            "mask = 10XXXXXXXXXXXXXXXXXXXXXXXXXXX1XXXX0X"
+        ];
+        let expected = vec![
+            (64, 2),
+            (97, 130),
+            (34359738432, 17179869186)
+        ];
 
-        assert_eq!(Program::parse_mask(mask_line), Ok(("", expected)));
+        for (ml, (set, clear)) in zip(mask_line, expected) {
+            let parsed = Program::parse_mask(ml);
+            let inst = Instruction::SetMask( Mask {set, clear} );
+            assert_eq!(parsed, Ok(("", inst)), "expected set: {} and clear: {}", set, clear);
+        }
     }
 
     #[test]
     fn test_parse_assign() {
-        use std::iter::zip;
-
         let set_lines = vec![
             "mem[8] = 11",
             "mem[7] = 101",
