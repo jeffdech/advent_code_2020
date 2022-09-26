@@ -1,7 +1,12 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::hash::Hash;
 
 use itertools::Itertools;
+
+pub trait Neighbors {
+    fn neighbors(&self) -> Vec<Self> where Self: Sized;
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Ord, Hash)]
 pub struct Vec3 {
@@ -21,8 +26,8 @@ impl From<Vec3Tuple> for Vec3 {
     }
 }
 
-impl Vec3 {
-    pub fn neighbors(&self) -> Vec<Vec3> {
+impl Neighbors for Vec3 {
+    fn neighbors(&self) -> Vec<Vec3> {
         let deltas = (-1..=1).cartesian_product((-1..=1).cartesian_product(-1..=1));
         deltas
             .into_iter()
@@ -36,9 +41,49 @@ impl Vec3 {
             })
             .collect()
     }
+}
 
+impl Vec3 {
     pub fn abs(&self) -> isize {
         self.x.abs() + self.y.abs() + self.z.abs()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug, Ord, Hash)]
+pub struct Vec4 {
+    x: isize,
+    y: isize,
+    z: isize,
+    w: isize,
+}
+
+type Vec4Tuple = (isize, isize, isize, isize);
+impl From<Vec4Tuple> for Vec4 {
+    fn from(t: Vec4Tuple) -> Self {
+        Self {
+            x: t.0,
+            y: t.1,
+            z: t.2,
+            w: t.3,
+        }
+    }
+}
+
+impl Neighbors for Vec4 {
+    fn neighbors(&self) -> Vec<Vec4> {
+        let deltas = (-1..=1).cartesian_product((-1..=1).cartesian_product((-1..=1).cartesian_product(-1..=1)));
+        deltas
+            .into_iter()
+            .filter(|&(dx, (dy, (dz, dw))): &(isize, (isize, (isize, isize)))| (dx.abs() + dy.abs() + dz.abs() + dw.abs()) > 0)
+            .map(|(dx, (dy, (dz, dw)))| {
+                Vec4 {
+                    x: self.x + dx,
+                    y: self.y + dy,
+                    z: self.z + dz,
+                    w: self.w + dw,
+                }
+            })
+            .collect()        
     }
 }
 
@@ -58,35 +103,17 @@ impl fmt::Display for CubeState {
     }
 }
 
-pub struct CubeGrid {
-    cubes: HashMap<Vec3, CubeState>,
+pub struct CubeGrid<T> 
+where T: Hash + Eq
+{
+    cubes: HashMap<T, CubeState>,
 }
 
-impl CubeGrid {
-    pub fn parse(input: &str) -> Self {
-        let mut cubes = HashMap::new();
+impl<T> CubeGrid<T> 
+where T: Hash + Eq + Neighbors + PartialOrd + Clone
+{
 
-        input.lines()
-            .enumerate()
-            .for_each(|(n, ln)| {
-                ln.chars()
-                    .enumerate()
-                    .for_each(|(m, c)| {
-                        cubes.insert(
-                            Vec3::from((m as isize, n as isize, 0 as isize)),
-                            match c {
-                                '.' => CubeState::Inactive,
-                                '#' => CubeState::Active,
-                                _ => unreachable!(),
-                            }
-                        );
-                    });
-            });
-        
-        Self { cubes }
-    }
-
-    pub fn get(&self, position: &Vec3) -> CubeState {
+    pub fn get(&self, position: &T) -> CubeState {
         match self.cubes.get(position) {
             None => CubeState::Inactive,
             Some(&cs) => cs,
@@ -127,17 +154,7 @@ impl CubeGrid {
     pub fn active_cubes(&self) -> usize {
         self.cubes.values()
             .filter(|&&cs| cs == CubeState::Active)
-            .sum()
-    }
-
-    fn span(&self) -> ((isize, isize), (isize, isize), (isize, isize)) {
-        let mmx = self.cubes.keys().map(|v| v.x).minmax();
-        let mmy = self.cubes.keys().map(|v| v.y).minmax();
-        let mmz = self.cubes.keys().map(|v| v.z).minmax();
-
-        (CubeGrid::axis_span(&mmx), 
-         CubeGrid::axis_span(&mmy), 
-         CubeGrid::axis_span(&mmz))
+            .count()
     }
 
     fn axis_span(minmax: &itertools::MinMaxResult<isize>) -> (isize, isize) {
@@ -151,7 +168,81 @@ impl CubeGrid {
     }
 }
 
-impl fmt::Display for CubeGrid {
+impl CubeGrid<Vec3> {
+    fn span(&self) -> ((isize, isize), (isize, isize), (isize, isize)) {
+        let mmx = self.cubes.keys().map(|v| v.x).minmax();
+        let mmy = self.cubes.keys().map(|v| v.y).minmax();
+        let mmz = self.cubes.keys().map(|v| v.z).minmax();
+
+        (CubeGrid::<Vec3>::axis_span(&mmx), 
+         CubeGrid::<Vec3>::axis_span(&mmy), 
+         CubeGrid::<Vec3>::axis_span(&mmz))
+    }
+
+    pub fn parse(input: &str) -> Self {
+        let mut cubes = HashMap::new();
+
+        input.lines()
+            .enumerate()
+            .for_each(|(n, ln)| {
+                ln.chars()
+                    .enumerate()
+                    .for_each(|(m, c)| {
+                        cubes.insert(
+                            Vec3::from((m as isize, n as isize, 0 as isize)),
+                            match c {
+                                '.' => CubeState::Inactive,
+                                '#' => CubeState::Active,
+                                _ => unreachable!(),
+                            }
+                        );
+                    });
+            });
+        
+        Self { cubes }
+    }
+}
+
+impl CubeGrid<Vec4> {
+    fn span(&self) -> ((isize, isize), (isize, isize), (isize, isize), (isize, isize)) {
+        let mmx = self.cubes.keys().map(|v| v.x).minmax();
+        let mmy = self.cubes.keys().map(|v| v.y).minmax();
+        let mmz = self.cubes.keys().map(|v| v.z).minmax();
+        let mmw = self.cubes.keys().map(|v| v.w).minmax();
+
+        (
+            CubeGrid::<Vec4>::axis_span(&mmx),
+            CubeGrid::<Vec4>::axis_span(&mmy),
+            CubeGrid::<Vec4>::axis_span(&mmz),
+            CubeGrid::<Vec4>::axis_span(&mmw),
+        )
+    }
+
+    pub fn parse(input: &str) -> Self {
+        let mut cubes = HashMap::new();
+
+        input.lines()
+            .enumerate()
+            .for_each(|(n, ln)| {
+                ln.chars()
+                    .enumerate()
+                    .for_each(|(m, c)| {
+                        cubes.insert(
+                            Vec4::from((m as isize, n as isize, 0 as isize, 0 as isize)),
+                            match c {
+                                '.' => CubeState::Inactive,
+                                '#' => CubeState::Active,
+                                _ => unreachable!(),
+                            }
+                        );
+                    });
+            });
+        
+        Self { cubes }
+    }
+}
+
+impl fmt::Display for CubeGrid<Vec3> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ((minx, maxx), (miny, maxy), (minz, maxz)) = self.span();
 
@@ -172,6 +263,36 @@ impl fmt::Display for CubeGrid {
                     });
                 
                 write!(f, "\n");
+            });
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for CubeGrid<Vec4> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ((minx, maxx), (miny, maxy), (minz, maxz), (minw, maxw)) = self.span();
+
+        (minw..=maxw)
+            .for_each(|w| {
+                (minz..=maxz)
+                    .for_each(|z| {
+                        writeln!(f, "z={}, w={}\n", z, w);
+        
+                        (miny..=maxy)
+                            .for_each(|y| {
+                                (minx..=maxx)
+                                    .for_each(|x| {
+                                        match self.cubes.get(&Vec4::from((x, y, z, w))) {
+                                            None => write!(f, "."),
+                                            Some(c) => write!(f, "{}", c)
+                                        };
+                                    });
+                                    write!(f, "\n");
+                            });
+                        
+                        write!(f, "\n");
+                    });
             });
 
         Ok(())

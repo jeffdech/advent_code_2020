@@ -2,8 +2,8 @@ mod cubes;
 use crate::cubes::*;
 
 fn main() {
-    // let mut grid = CubeGrid::parse(include_str!("example.txt"));
-    let mut grid = CubeGrid::parse(include_str!("input.txt"));
+    // let mut grid = CubeGrid::<Vec4>::parse(include_str!("example.txt"));
+    let mut grid = CubeGrid::<Vec4>::parse(include_str!("input.txt"));
 
     // println!("{}", grid);
     (1..=6)
