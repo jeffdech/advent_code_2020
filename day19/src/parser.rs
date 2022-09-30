@@ -112,6 +112,7 @@ pub mod parsing {
 mod tests {
     use super::*;
     use std::iter::zip;
+    use indoc::indoc;
 
     #[test]
     fn test_parse_rule() {
@@ -169,5 +170,31 @@ mod tests {
         let expected = ParserRule::Alt(vec![1, 2], vec![3, 4]);
 
         assert_eq!(parsing::alt_list(input), Ok(("", expected)));
+    }
+
+    #[test]
+    fn test_regex_matches() {
+        let ruleset_input = indoc!{"
+        0: 4 1 5
+        1: 2 3 | 3 2
+        2: 4 4 | 5 5
+        3: 4 5 | 5 4
+        4: \"a\"
+        5: \"b\"\n
+        "};
+
+        let text = indoc!{"
+        ababbb
+        bababa
+        abbbab
+        aaabbb
+        aaaabbb
+        "};
+
+        let expected = vec![true, false, true, false, false];
+        let regex = parsing::rule_set(ruleset_input).unwrap().1.regex();
+        let matches: Vec<bool> = text.lines().map(|l| regex.is_match(l)).collect();
+
+        assert_eq!(matches, expected);
     }
 }
